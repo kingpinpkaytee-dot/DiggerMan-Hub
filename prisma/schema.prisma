@@ -1,0 +1,106 @@
+// DiggerMan Hub — Prisma schema
+// Start with SQLite for local/dev. Switch to Postgres later by changing provider + DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      SocialAccount[]
+  posts         Post[]
+  conversations Conversation[]
+}
+
+model SocialAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  platform        String   // "x" | "meta" | "linkedin" | "tiktok" | "buffer"
+  platformUserId  String?
+  username        String?
+  displayName     String?
+  avatarUrl       String?
+  accessToken     String?  // encrypted in production
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+  bufferChannelId String?  // Buffer channel ID when using Buffer
+  metadata        String?  // JSON string for extra platform data
+  isActive        Boolean  @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts           Post[]
+  messages        Message[]
+
+  @@unique([userId, platform, platformUserId])
+  @@index([userId])
+}
+
+model Post {
+  id              String   @id @default(cuid())
+  userId          String
+  socialAccountId String?
+  content         String
+  mediaUrls       String?  // JSON array of URLs
+  status          String   @default("draft") // draft | scheduled | published | failed
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  bufferUpdateId  String?  // Buffer update ID
+  platformPostId  String?  // native platform post ID
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount? @relation(fields: [socialAccountId], references: [id])
+
+  @@index([userId, status])
+  @@index([scheduledAt])
+}
+
+model Conversation {
+  id              String   @id @default(cuid())
+  userId          String
+  platform        String
+  platformThreadId String?
+  participantName String?
+  participantAvatar String?
+  lastMessageAt   DateTime?
+  unreadCount     Int      @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages        Message[]
+
+  @@index([userId, lastMessageAt])
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  conversationId  String
+  socialAccountId String?
+  direction       String   // "inbound" | "outbound"
+  content         String
+  platformMessageId String?
+  isRead          Boolean  @default(false)
+  sentAt          DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount? @relation(fields: [socialAccountId], references: [id])
+
+  @@index([conversationId, sentAt])
+}
